@@ -1,0 +1,53 @@
+{
+  "attempted_at": "2026-11-01T16:49:55.906546+00:00",
+  "checks": [
+    {
+      "task": "snapshot",
+      "ok": true,
+      "rows": 1400,
+      "meta": {
+        "source": "Tencent 公开批量快照 · AkShare主源失败后的补充",
+        "driver": "tencent_public",
+        "frequency": "snapshot",
+        "configured_expected": 4798,
+        "observed": 1400,
+        "partial": true,
+        "timestamp_basis": "Provider timestamp, Asia/Shanghai; latency unverified"
+      },
+      "error": null
+    },
+    {
+      "task": "bars",
+      "ok": true,
+      "rows": 658,
+      "meta": {
+        "source": "AkShare · Tencent 日线补充（未复权）",
+        "frequency": "daily_unadjusted",
+        "adjustment": "unadjusted"
+      },
+      "error": null
+    },
+    {
+      "task": "options",
+      "ok": true,
+      "rows": 692,
+      "meta": {
+        "source": "AkShare · 上交所当日合约目录（无实时价格）",
+        "frequency": "contract_directory_no_quotes"
+      },
+      "error": null
+    },
+    {
+      "task": "forex",
+      "ok": true,
+      "rows": 25,
+      "meta": {
+        "source": "AkShare · 中国外汇交易中心 人民币即期买卖报价",
+        "frequency": "interbank_bid_ask_snapshot"
+      },
+      "error": null
+    }
+  ],
+  "deployment_verified": false,
+  "latency_verified": false
+}

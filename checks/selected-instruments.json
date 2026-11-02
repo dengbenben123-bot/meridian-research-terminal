@@ -1,0 +1,132 @@
+{
+  "attempted_at": "2026-11-01T16:58:32.698494+00:00",
+  "checks": [
+    {
+      "task": "snapshot",
+      "selection": {
+        "market": "cn",
+        "symbols": [
+          "600519.SH",
+          "000001.SZ"
+        ]
+      },
+      "state": "ok",
+      "rows": 2,
+      "meta": {
+        "source": "Tencent 公开批量快照 · AkShare主源失败后的补充",
+        "driver": "tencent_public",
+        "frequency": "snapshot",
+        "configured_expected": 2,
+        "observed": 2,
+        "partial": false,
+        "timestamp_basis": "Provider timestamp, Asia/Shanghai; latency unverified"
+      },
+      "errors": [],
+      "observations": [
+        {
+          "symbol": "600519.SH",
+          "name": "贵州茅台",
+          "price": 1392.05,
+          "source_time": "2026-10-30T16:14:55+08:00",
+          "age_seconds": 0.1
+        },
+        {
+          "symbol": "000001.SZ",
+          "name": "平安银行",
+          "price": 11.64,
+          "source_time": "2026-10-30T16:15:00+08:00",
+          "age_seconds": 0.1
+        }
+      ]
+    },
+    {
+      "task": "snapshot",
+      "selection": {
+        "market": "fund",
+        "symbols": [
+          "510300.SH"
+        ]
+      },
+      "state": "ok",
+      "rows": 1,
+      "meta": {
+        "source": "Tencent 公开批量快照 · AkShare主源失败后的补充",
+        "driver": "tencent_public",
+        "frequency": "snapshot",
+        "configured_expected": 1,
+        "observed": 1,
+        "partial": false,
+        "timestamp_basis": "Provider timestamp, Asia/Shanghai; latency unverified"
+      },
+      "errors": [],
+      "observations": [
+        {
+          "symbol": "510300.SH",
+          "name": "沪深300ETF华泰柏瑞",
+          "price": 4.065,
+          "source_time": "2026-10-30T16:14:47+08:00",
+          "age_seconds": 0.1
+        }
+      ]
+    },
+    {
+      "task": "snapshot",
+      "selection": {
+        "market": "index",
+        "symbols": [
+          "000001.SH"
+        ]
+      },
+      "state": "ok",
+      "rows": 1,
+      "meta": {
+        "source": "Tencent 公开批量快照 · AkShare主源失败后的补充",
+        "driver": "tencent_public",
+        "frequency": "snapshot",
+        "configured_expected": 1,
+        "observed": 1,
+        "partial": false,
+        "timestamp_basis": "Provider timestamp, Asia/Shanghai; latency unverified"
+      },
+      "errors": [],
+      "observations": [
+        {
+          "symbol": "000001.SH",
+          "name": "上证指数",
+          "price": 3599.02,
+          "source_time": "2026-10-30T16:14:00+08:00",
+          "age_seconds": 0.1
+        }
+      ]
+    },
+    {
+      "task": "overview",
+      "selection": {
+        "symbol": "600519.SH"
+      },
+      "state": "ok",
+      "rows": 1,
+      "meta": {
+        "source": "AkShare · 巨潮资讯 公司资料",
+        "frequency": "latest_available"
+      },
+      "errors": []
+    },
+    {
+      "task": "financials",
+      "selection": {
+        "symbol": "600519.SH"
+      },
+      "state": "ok",
+      "rows": 104,
+      "meta": {
+        "source": "AkShare · Eastmoney 财务指标",
+        "frequency": "reported_quarterly_latest_vintage",
+        "adjustment": null
+      },
+      "errors": []
+    }
+  ],
+  "deployment_verified": false,
+  "latency_verified": false
+}
