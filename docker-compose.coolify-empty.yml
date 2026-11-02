@@ -1,0 +1,79 @@
+# Remote Git contexts: push the extracted frontend/ and backend/ folders to the repository root first.
+services:
+  frontend:
+    build:
+      context: ${SOURCE_REPOSITORY_URL:?Set your public Git repository URL}#${SOURCE_GIT_REF:-main}:frontend
+    expose:
+    - '80'
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+  backend:
+    build:
+      context: ${SOURCE_REPOSITORY_URL:?Set your public Git repository URL}#${SOURCE_GIT_REF:-main}:backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: meridian
+      POSTGRES_DB: meridian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
+      REDIS_URL: redis://redis:6379/0
+      MERIDIAN_AUTH_DIGEST: ${MERIDIAN_AUTH_DIGEST:?Set the terminal access digest
+        in Coolify}
+      DATA_PRIMARY: ${DATA_PRIMARY:-akshare}
+      DATA_FALLBACK_CHAIN: ${DATA_FALLBACK_CHAIN:-akshare,tushare}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      SNAPSHOT_INTERVAL_SECONDS: ${SNAPSHOT_INTERVAL_SECONDS:-10}
+      PROVIDER_TIMEOUT_SECONDS: ${PROVIDER_TIMEOUT_SECONDS:-35}
+      BROKER_MODE: ${BROKER_MODE:-paper}
+      REALTIME_PROVIDER: ${REALTIME_PROVIDER:-}
+    expose:
+    - '8000'
+    mem_limit: 1536m
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+    - --maxmemory
+    - 256mb
+    - --maxmemory-policy
+    - allkeys-lru
+    volumes:
+    - redis_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: meridian
+      POSTGRES_DB: meridian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Coolify}
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U meridian -d meridian
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  redis_data: null
+  postgres_data: null
