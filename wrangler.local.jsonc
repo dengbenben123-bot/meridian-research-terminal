@@ -1,0 +1,12 @@
+{
+  "$schema":"node_modules/wrangler/config-schema.json",
+  "name":"meridian-research-terminal-local",
+  "main":"src/api/index.ts",
+  "compatibility_date":"2026-10-29",
+  "compatibility_flags":["nodejs_compat"],
+  "assets":{"directory":"dist/client","binding":"ASSETS","not_found_handling":"single-page-application","run_worker_first":["/api/*","/media/*","/healthz"]},
+  "d1_databases":[{"binding":"DB","database_name":"meridian-local","database_id":"local-meridian","migrations_dir":"migrations"}],
+  "r2_buckets":[{"binding":"FILES","bucket_name":"meridian-local-files"}],
+  "ratelimits":[{"name":"AUTH_LIMITER","namespace_id":"61011","simple":{"limit":10,"period":60}},{"name":"WRITE_LIMITER","namespace_id":"61012","simple":{"limit":30,"period":60}},{"name":"READ_LIMITER","namespace_id":"61013","simple":{"limit":60,"period":60}}],
+  "dev":{"port":8787}
+}

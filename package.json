@@ -1,0 +1,38 @@
+{
+  "name": "meridian-research-platform",
+  "version": "6.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "npm run build && wrangler dev --local --config wrangler.local.jsonc",
+    "build": "vite build && node scripts/prerender.mjs",
+    "check": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "vitest run --config vitest.api.config.ts",
+    "test:web": "vitest run --config vitest.web.config.ts",
+    "db:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc",
+    "build:worker": "wrangler deploy --dry-run --outdir dist/worker",
+    "configure:deploy": "node scripts/configure-deploy.mjs",
+    "deploy": "npm run build && npm run configure:deploy && node scripts/check-target.mjs && wrangler deploy --dry-run --config wrangler.deploy.json --outdir dist/worker && node scripts/sync-secrets.mjs && wrangler d1 migrations apply DB --remote --config wrangler.deploy.json && wrangler deploy --config wrangler.deploy.json && node scripts/verify-live.mjs"
+  },
+  "dependencies": {
+    "vue": "3.5.44",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.12",
+    "@cloudflare/workers-types": "5.20261102.1",
+    "@types/node": "24.19.2",
+    "@vitejs/plugin-vue": "6.0.10",
+    "@vue/test-utils": "2.4.6",
+    "jsdom": "27.4.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "4.1.12",
+    "vue-tsc": "3.3.14",
+    "wrangler": "4.155.0"
+  }
+}
