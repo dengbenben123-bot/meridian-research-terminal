@@ -33,13 +33,6 @@ jobs:
     timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
-      CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET }}
-      PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
-      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
-      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:

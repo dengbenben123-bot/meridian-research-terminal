@@ -1,136 +1,76 @@
-# Publish Meridian through GitHub and Cloudflare
+# Publish v6 with one Cloudflare credential
 
-This guide updates the **existing** `meridian-research-terminal` Worker in the account with the `cooked-jersey.workers.dev` subdomain. It does not create another Worker, another hostname or a preview claim link. You do not need Docker, a local application server or the Cloudflare code editor.
+The GitHub workflow now needs only **one repository secret: `CLOUDFLARE_API_TOKEN`**. Account ID, database ID, bucket, origin, app secret and Turnstile keys are discovered or prepared automatically. You do not need to enter the eight settings from the earlier instructions.
 
-Repository: https://github.com/dengbenben123-bot/meridian-research-terminal
+This updates the existing Worker at:
 
-Site target: https://meridian-research-terminal.cooked-jersey.workers.dev/
+https://meridian-research-terminal.cooked-jersey.workers.dev/
 
-## 1. Prepare the Cloudflare resources once
+## One-time authorization
 
-Sign in to the account that owns the existing Worker. Find its Account ID in the dashboard and retain it for step 3.
+1. Open [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens), choose **Create Token**, and use the **Edit Cloudflare Workers** template. Restrict it to the account that owns `cooked-jersey.workers.dev`.
+2. Ensure these **Account** permissions are included:
 
-1. Under **Storage & databases → D1 SQL database**, create an empty database named `meridian-platform`. Copy its Database ID. The workflow applies `migrations/0001_platform.sql`; do not paste the schema repeatedly into a populated database.
-2. Under **Storage & databases → R2**, enable R2 if necessary and create a Standard storage bucket named `meridian-files`. Keep public bucket access and `r2.dev` disabled: file access goes through the Worker, which checks permissions. R2 has included usage, but enabling it requires an R2 subscription and usage beyond the allowance can be billed.
-3. Open **Turnstile**, add a managed widget, and allow the hostname `meridian-research-terminal.cooked-jersey.workers.dev` (without `https://` or a path). Copy its site key and secret key. Use real production keys, not the `1x000…` development test keys.
+   | Permission | Access |
+   | --- | --- |
+   | Workers Scripts | Edit |
+   | Account Settings | Read |
+   | D1 | Edit |
+   | Workers R2 Storage | Edit |
+   | Turnstile | Edit |
 
-If this Worker already has a `DB` or `FILES` binding, use its existing resource only after confirming it contains this platform's schema/data. The deployment guard rejects attempts to silently change an existing database or bucket. An unrelated existing binding or an older/incompatible schema needs an explicit migration; creating an empty replacement and forcing deployment is not a data migration.
+   If your dashboard uses granular roles, give Workers Editor for the existing Worker and resource creation access for D1, R2 and Turnstile. Under the granular model, Editor cannot create a missing resource; the initial setup needs the corresponding product Admin permission. Limit the token to the intended account. It does not need full account administration, billing changes, DNS editing or a global API key.
+3. Copy the token directly into [GitHub repository Secrets](https://github.com/dengbenben123-bot/meridian-research-terminal/settings/secrets/actions): select **New repository secret**, name it **`CLOUDFLARE_API_TOKEN`**, paste the token into **Secret**, and save.
 
-The account and resource names are not credentials. The token, application secret and Turnstile secret are credentials.
+The token is the only value you need to copy. Keep it out of source files and chat. Cloudflare dashboard login alone does not authorize a GitHub runner. This repository cannot add the credential on your behalf through its connected GitHub integration.
 
-## 2. Create a deployment API token
+R2 must be enabled in the account. If Cloudflare asks you to activate its R2 subscription, complete that account setup yourself. The deployment never activates billing or purchases a plan. R2 includes free usage but can charge for usage beyond its allowance.
 
-Use Cloudflare's **Account API tokens → Create Token** (or the API Tokens page in your profile), starting with the **Edit Cloudflare Workers** template. Restrict it to the account that owns the existing Worker.
+## Deploy
 
-The pipeline needs these account permissions, using the equivalent Editor/Write labels if the dashboard displays granular roles:
+Open [Check and deploy Meridian](https://github.com/dengbenben123-bot/meridian-research-terminal/actions/workflows/cloudflare.yml), select **Run workflow → main → Run workflow**.
 
-- Workers Scripts Edit / Workers Editor, for the existing Worker's settings, encrypted secrets, assets and deployment.
-- Account Settings Read, for account/subdomain checks.
-- D1 Edit / D1 Write, for database migrations.
-- Workers R2 Storage Edit, for bucket binding access/validation.
+There is no need to upload source again, find an entry module, run a local website or use Docker. Future pushes to `main` use the same authorization. Use this GitHub Actions workflow as the publishing path; do not run a second Workers Builds pipeline against the same Worker.
 
-Limit resource scope where the token interface supports it. This workers.dev deployment does not add DNS records, zones, custom domains or routes. A global API key is unnecessary. This guide uses GitHub Actions, so Workers Builds configuration permissions are unnecessary too.
+## What happens automatically
 
-Put the token directly into the GitHub secret below. Do not paste it into chat, source files, commit messages or a public issue. Revoke and replace a token if it has already been exposed. Authorizing a Cloudflare dashboard browser session does not authenticate a GitHub Actions runner: the runner uses this token.
+- Check types, run tests, build Vue and pre-render public pages.
+- Discover the authorized account that owns `cooked-jersey.workers.dev` and confirm that `meridian-research-terminal` already exists. No new Worker, hostname or claim link is created.
+- Retain the existing compatibility date/flags, unrelated text variables and encrypted secrets, and legacy KV bindings.
+- Reuse the existing `DB` and `FILES` resources. If those bindings are absent, find or create `meridian-platform` and the private Standard R2 bucket `meridian-files`.
+- Check that the R2 bucket has no enabled direct public domain. Existing public access stops deployment for review rather than exposing private evidence or disabling another service.
+- Inspect an existing D1 database before migration. Empty databases or the recognized v6 schema are accepted; older or unrelated data stops deployment for a reviewed migration. No existing table is dropped, reset or replaced.
+- Reuse the configured production Turnstile widget, or prepare a managed widget for this exact hostname. Existing widget secrets are not rotated. Keys go directly to Cloudflare encrypted Worker secrets.
+- Generate a random `AUTH_SECRET` only when none exists. Existing password secrets are preserved on future deployments. A legacy plaintext app secret is moved to an encrypted binding with the same value.
+- Write only nonsecret deployment metadata to the ignored `wrangler.deploy.json`, bundle with that configuration, apply migrations, synchronize app secrets, deploy and verify the release.
 
-## 3. Configure GitHub settings
+Generated credentials stay in process memory until uploaded to Cloudflare. They are masked in GitHub Actions and are not stored in repository files or artifacts. The deployment API token is never added as an application variable. Resource setup is resumable: existing matching resources are reused after a failed attempt. Unsupported legacy bindings and incompatible schemas stop for review instead of silently deleting data.
 
-In the repository, open **Settings → Secrets and variables → Actions**.
+## Verify
 
-On the **Variables** tab, add these Repository variables:
+In the `deploy` job, **Run npm run deploy** must have run successfully. A green workflow with that step marked **Skipped** means publishing did not happen.
 
-| Name | Value |
+The final command checks the release at the existing URL. Open:
+
+https://meridian-research-terminal.cooked-jersey.workers.dev/healthz
+
+The response must include `"status":"ok"` and `"version":"6.0.0"`. The final log also reports that the public pages, anonymous session and private API gate were verified. Test normal registration/Turnstile, a private note and a small file in your browser after deployment; automated verification does not create a production account.
+
+## If a run stops
+
+| Message | Action |
 | --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | The existing Cloudflare account's 32-character ID |
-| `CLOUDFLARE_D1_DATABASE_ID` | The real UUID of the D1 database from step 1 |
-| `CLOUDFLARE_R2_BUCKET` | `meridian-files`, or the existing approved bucket name |
-| `PUBLIC_ORIGIN` | `https://meridian-research-terminal.cooked-jersey.workers.dev` — no trailing slash |
-| `TURNSTILE_SITE_KEY` | The production widget's public site key |
+| Publishing was skipped | Add the single repository secret `CLOUDFLARE_API_TOKEN`, then run the workflow again. |
+| 401 / 403 / cannot find the account | Check the token's expiry, account scope and the five permissions above. |
+| R2 access failed | Check R2 Storage permissions and that R2 is enabled. The script cannot activate an account subscription. |
+| Existing schema or binding needs migration | Preserve the named resource. Review a code/data migration; do not delete it to make the deployment pass. |
+| Worker settings changed during preparation | Someone else changed relevant settings. Review the change, then retry. |
+| Live release not verified | Read the deployment log; a successful source build is not proof that v6 is live. |
 
-On the **Secrets** tab, select **New repository secret** for:
+The previous v4.4.1 data is not automatically converted into v6 accounts. Existing Cloudflare resources are retained, but a recognized schema or a deliberate data migration is required to reuse a populated database. A code rollback is available in the existing Worker's Deployments history; it does not roll back D1 migrations or restore deleted R2 files.
 
-| Name | Value |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | The account-scoped deployment token from step 2 |
-| `AUTH_SECRET` | A stable, randomly generated secret with at least 32 characters |
-| `TURNSTILE_SECRET_KEY` | The production widget's private secret key |
+## Advanced manual path
 
-To generate a new application secret privately on your own computer, you can use a password manager or:
+The old explicit configuration remains available as `npm run deploy:manual`. It requires the five metadata values in `.env.example` and the private `CLOUDFLARE_API_TOKEN`, `AUTH_SECRET` and `TURNSTILE_SECRET_KEY` environment variables. It is not used by the default GitHub workflow. Preserve the same production `AUTH_SECRET` if using that path.
 
-```sh
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Save that value directly as `AUTH_SECRET` and keep a secure recovery copy. **Reuse it on every redeploy.** It is used in password hashing, so replacing it without a migration breaks existing passwords. Use a different secret for another deployment/environment. If the app is already using a production `AUTH_SECRET`, preserve that value.
-
-These are **repository** settings, not environment-specific GitHub settings: the supplied workflow does not select a GitHub Environment. Cloudflare's existing runtime variables alone are not sufficient; the build runner also needs the repository settings. It uploads only the two named app secrets to Cloudflare via standard input. The Cloudflare API token is never uploaded as an app variable.
-
-## 4. Run the workflow
-
-1. Open the repository's **Actions** tab and enable workflows if GitHub asks.
-2. Select **Check and deploy Meridian**.
-3. Select **Run workflow**, choose `main`, then select **Run workflow** again. Subsequent pushes to `main` trigger it automatically.
-4. Open the resulting run and watch the `check` and `deploy` jobs.
-
-Do not also configure an independent Workers Builds pipeline to publish the same branch: choose the GitHub Actions workflow as the deployment path. If the Worker already has a Git integration that automatically deploys, disable its automatic builds before enabling this pipeline, so two systems do not race to publish different configurations.
-
-The pipeline:
-
-1. Installs the committed npm lockfile and checks web/API types.
-2. Runs isolated D1/R2 account, permission, file, search and quote tests, plus Vue and deployment configuration tests.
-3. Builds and pre-renders public pages, then bundles the Worker without publishing.
-4. Checks that all required configuration names are present. Missing values produce a visible setup warning and **skip publishing**; a green build alone is not a successful deployment.
-5. Confirms the existing `cooked-jersey` account/subdomain and Worker, preserving its compatibility date and flags. It retains unrelated text variables and encrypted secrets using `keep_vars`; it deliberately sets `APP_ENV`, `PUBLIC_ORIGIN` and `TURNSTILE_SITE_KEY`, and synchronizes the two named app secrets.
-6. Rejects mismatched `DB`/`FILES` bindings or other unhandled existing resource bindings. It does not silently remove them. Resolve the named migration issue in code before retrying.
-7. Bundles with the actual deployment configuration, applies pending D1 migrations, uploads the app and verifies the live release.
-
-You do **not** need to find an “entry module” in the Cloudflare dashboard. This is a multi-file source project with a build step and static assets. Pasting `src/api/index.ts`, only an `.mjs` fragment, or the Vue source into Quick Edit will not deploy the product. Commit the complete source, then use the workflow.
-
-## 5. Verify the result
-
-The workflow's final command runs `scripts/verify-live.mjs`. It verifies:
-
-- `/healthz` returns HTTP 200, `status: "ok"` and version `6.0.0`.
-- `/` and `/guide` serve the expected public pages.
-- An anonymous request to `/api/watchlist` returns 401 with `no-store`.
-- `/api/session` returns `user: null` for an anonymous client with `no-store`.
-
-Only a successful final verification confirms that the expected release was served from the production URL. The script does not register a test account in production or bypass Turnstile. After deployment, perform one normal browser check: create an account, save a private note, sign out and confirm its link is inaccessible; sign back in and publish a selected note. Also check a small private file and one owned watchlist quote request. A provider outage is displayed as unavailable data, not a fabricated price.
-
-## Troubleshooting
-
-| Symptom | What to check |
-| --- | --- |
-| Setup warning / deploy commands skipped | The run summary lists missing **names**, not values. Add them in GitHub repository Variables/Secrets, then rerun the workflow. |
-| “You are not authenticated”, 401 or 403 | Check `CLOUDFLARE_API_TOKEN`, account scope, expiry and product permissions. Dashboard login cookies are not available to Actions. |
-| Account/subdomain mismatch | Use the account that owns `cooked-jersey.workers.dev`. Do not change the Worker name to create a replacement. |
-| Binding migration guard stops deployment | Review the existing binding identified in the log; preserve its data and add a reviewed migration/configuration update. |
-| D1 migration fails | Confirm Database ID and schema. Check the named migration error; do not drop a populated database or rerun raw CREATE TABLE SQL. |
-| `/healthz` is 503 / “Accounts unavailable” | Check D1 migrations, R2 binding, app secret, production Turnstile keys and exact `PUBLIC_ORIGIN`. |
-| Captcha does not load or verify | Check the widget hostname, real site/secret pair, permitted challenge scripts and network access. Tokens are single use and expire. |
-| 429 | Wait and retry. The app has explicit rate limits; repeated reloads can share an IP allowance. |
-| Public source unavailable / partial quote response | Retry later. Configured directory coverage does not guarantee that a public source supplies every price. |
-| The old site is still visible | Check that the deploy command actually ran and the live verification passed. A skipped deploy or successful source build has not published a release. |
-
-## Migration, compatibility and rollback
-
-The earlier server/container edition stays in Git history. No old Postgres data is automatically copied into D1, and previous single-password access is not converted into named accounts. Export and retain old records before migrating them. The initial D1 schema is for a new empty platform database; schema collisions require a deliberate migration.
-
-Deployment checks read the current compatibility date and flags and use them for the upload. They do not change the old runtime policy behind your back. Unsupported compatibility settings stop deployment for review. Existing unrelated variables/secrets remain in Cloudflare. Check the generated binding/configuration changes before deliberately introducing another resource.
-
-For a code regression after a completed deployment, use the existing Worker's **Deployments** history in Cloudflare to roll back to the prior version. A Worker rollback does not reverse D1 migrations, delete user records or restore deleted R2 files. Retain database/file backups before data-changing migrations. A new GitHub commit should be checked and deployed normally after the issue is fixed.
-
-## Optional command-line deployment
-
-GitHub Actions is the recommended path. If you use an authenticated shell instead, install dependencies, set the same metadata and secrets as environment variables privately, then run:
-
-```sh
-npm ci
-npm run check
-npm test
-npm run deploy
-```
-
-`npm run deploy` uses the same target checks, actual-config dry run, secret synchronization, migrations, deployment and live verification. It does not start a local website. Do not use `wrangler deploy --temporary`, create another Worker to avoid authentication, or commit a generated `wrangler.deploy.json` / local secret file.
-
-Official references: [GitHub Actions authentication](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/), [Workers permissions](https://developers.cloudflare.com/workers/authorization/workers/), [D1 setup](https://developers.cloudflare.com/d1/get-started/), [R2 setup and subscription](https://developers.cloudflare.com/r2/get-started/), [Turnstile server-side verification](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/).
+Official references: [GitHub Actions authentication](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/), [Workers permissions](https://developers.cloudflare.com/workers/authorization/), [D1 API](https://developers.cloudflare.com/api/resources/d1/), [Turnstile widget API](https://developers.cloudflare.com/turnstile/get-started/widget-management/api/), [R2 setup](https://developers.cloudflare.com/r2/get-started/).

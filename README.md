@@ -19,9 +19,9 @@ Every private read and write is checked on the server. The UI does not supply tr
 
 ## Publish from GitHub
 
-Follow **[DEPLOY.md](DEPLOY.md)** once to configure the existing Cloudflare account, D1, private R2 bucket, Turnstile and GitHub repository settings. Then push to `main`, or run **Check and deploy Meridian** from the Actions tab. No code needs to be pasted into the Cloudflare dashboard editor.
+Save **one GitHub repository secret, `CLOUDFLARE_API_TOKEN`**, with the account permissions in **[DEPLOY.md](DEPLOY.md)**. Then run **Check and deploy Meridian** from the Actions tab. The workflow discovers the account, prepares D1/R2/Turnstile, generates a missing app secret and publishes to the existing Worker. R2 must already be enabled in the account. No other repository variables or keys are required.
 
-The workflow installs locked dependencies, checks types, runs API and interface tests, builds the public pages, bundles the Worker, checks the existing target and compatibility settings, applies migrations, deploys and verifies the live release. Pull requests run checks without deploying.
+Future pushes to `main` deploy with the same authorization. The workflow installs locked dependencies, checks types, runs API and interface tests, builds public pages, preserves existing target/settings and app secrets, inspects existing data, applies migrations, deploys and verifies the live release. Pull requests run checks without deploying. Unsupported legacy schemas/bindings stop for a deliberate migration; no existing database is reset or replaced.
 
 ## Repository
 
