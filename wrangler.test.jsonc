@@ -1,5 +1,6 @@
 {
  "name":"meridian-platform-tests","main":"src/api/index.ts","compatibility_date":"2026-10-29","compatibility_flags":["nodejs_compat"],
  "d1_databases":[{"binding":"DB","database_name":"test-db","database_id":"test-db"}],
- "r2_buckets":[{"binding":"FILES","bucket_name":"test-files"}]
+ "r2_buckets":[{"binding":"FILES","bucket_name":"test-files"}],
+ "kv_namespaces":[{"binding":"FILE_KV","id":"test-file-kv"}]
 }

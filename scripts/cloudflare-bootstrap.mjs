@@ -1,7 +1,7 @@
 import {randomBytes} from 'node:crypto';
 
 // This bootstrap is deliberately limited to the user's existing production site.
-export const TARGET={worker:'meridian-research-terminal',subdomain:'cooked-jersey',origin:'https://meridian-research-terminal.cooked-jersey.workers.dev',database:'meridian-platform',bucket:'meridian-files',widget:'Meridian Research Terminal v6'};
+export const TARGET={worker:'meridian-research-terminal',subdomain:'cooked-jersey',origin:'https://meridian-research-terminal.cooked-jersey.workers.dev',database:'meridian-platform',bucket:'meridian-files',namespace:'meridian-v6-files',widget:'Meridian Research Terminal v6'};
 const accountId=/^[a-f0-9]{32}$/i;
 const databaseId=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 const testKey=value=>/^[123]x0+/.test(value||'');
@@ -59,7 +59,7 @@ function validateSettings(settings){
  if(!settings||!Array.isArray(settings.bindings)||!/^\d{4}-\d{2}-\d{2}$/.test(settings.compatibility_date||''))throw Error('Cannot verify the existing Worker settings.');
  const flags=settings.compatibility_flags??[];
  if(!Array.isArray(flags)||flags.some(flag=>typeof flag!=='string')||settings.compatibility_date<'2024-09-23'||flags.some(flag=>['no_nodejs_compat','no_nodejs_compat_v2'].includes(flag)))throw Error('Existing compatibility settings need review and were not changed.');
- const types={DB:'d1',FILES:'r2_bucket',ASSETS:'assets',AUTH_LIMITER:'ratelimit',WRITE_LIMITER:'ratelimit',READ_LIMITER:'ratelimit'};
+ const types={DB:'d1',FILES:'r2_bucket',FILE_KV:'kv_namespace',ASSETS:'assets',AUTH_LIMITER:'ratelimit',WRITE_LIMITER:'ratelimit',READ_LIMITER:'ratelimit'};
  for(const binding of settings.bindings){
   if(Object.hasOwn(types,binding.name)&&binding.type!==types[binding.name])throw Error('An existing resource binding has an unexpected type. Review it before migration: '+binding.name);
   if(['AUTH_SECRET','TURNSTILE_SITE_KEY','TURNSTILE_SECRET_KEY'].includes(binding.name)&&!['plain_text','secret_text'].includes(binding.type))throw Error('An application credential binding has an unexpected type.');
@@ -79,7 +79,7 @@ async function inspectDatabase(client,prefix,id){
  };
  const tables=(await rows("SELECT name FROM sqlite_master WHERE type='table'")).map(row=>row.name);
  const application=tables.filter(name=>!name.startsWith('sqlite_')&&!name.startsWith('_cf_')&&!['_cf_METADATA','d1_migrations'].includes(name));
- if(!application.length)return;
+ if(!application.length)return false;
  const required={users:['id','email','display_name','password_hash','created_at'],sessions:['token_hash','user_id','csrf_hash','created_at','expires_at'],posts:['id','owner_id','title','body','visibility','version','created_at','updated_at'],posts_fts:['title','body'],files:['id','owner_id','object_key','filename','mime','bytes','visibility','status','created_at'],watchlist:['user_id','symbol','created_at']};
  if(!Object.keys(required).every(name=>tables.includes(name))||!tables.includes('d1_migrations'))throw Error('The existing database contains an older or unrelated schema. A data migration is required; no tables were changed or deleted.');
  for(const [table,columns] of Object.entries(required)){
@@ -87,6 +87,7 @@ async function inspectDatabase(client,prefix,id){
   if(!columns.every(column=>found.has(column)))throw Error('The existing database needs a reviewed schema migration. No tables were changed.');
  }
  if(!(await rows('SELECT name FROM d1_migrations WHERE name=?',['0001_platform.sql'])).length)throw Error('The existing schema has no matching migration record. Review it before applying the initial migration.');
+ return Number((await rows('SELECT COUNT(*) AS count FROM files'))[0]?.count)>0;
 }
 
 function widgetFits(widget){const host=new URL(TARGET.origin).hostname;return Array.isArray(widget?.domains)&&widget.domains.some(domain=>typeof domain==='string'&&(host===domain||host.endsWith('.'+domain)));}
@@ -98,7 +99,7 @@ async function privateBucket(client,prefix,name){
  if(managed.enabled||custom.domains.some(domain=>domain.enabled))throw Error('The evidence bucket allows direct public access. Review its r2.dev/custom domains before storing private files. Its public settings were not changed.');
 }
 
-function fingerprint(settings){const db=own(settings,'DB'),files=own(settings,'FILES');return JSON.stringify({date:settings.compatibility_date,flags:[...(settings.compatibility_flags??[])].sort(),db:db?{type:db.type,id:db.id}:null,files:files?{type:files.type,bucket:files.bucket_name,jurisdiction:files.jurisdiction||'default'}:null,siteKey:publicKey(settings)});}
+function fingerprint(settings){const db=own(settings,'DB'),files=own(settings,'FILES'),kv=own(settings,'FILE_KV');return JSON.stringify({date:settings.compatibility_date,flags:[...(settings.compatibility_flags??[])].sort(),db:db?{type:db.type,id:db.id}:null,files:files?{type:files.type,bucket:files.bucket_name,jurisdiction:files.jurisdiction||'default'}:null,kv:kv?{type:kv.type,id:kv.namespace_id}:null,siteKey:publicKey(settings)});}
 
 export async function prepareAutomaticDeployment({token,base,fetchFn,mask=()=>{},log=()=>{},generateSecret=()=>randomBytes(32).toString('hex')}){
  if(base.name!==TARGET.worker||base.vars?.PUBLIC_ORIGIN!==TARGET.origin)throw Error('Automatic deployment is restricted to the existing Meridian Worker and hostname.');
@@ -109,20 +110,34 @@ export async function prepareAutomaticDeployment({token,base,fetchFn,mask=()=>{}
  if(auth?.type==='plain_text'){
   mask(auth.text||'');if(typeof auth.text!=='string'||auth.text.trim().length<32||/^(fixture|local-development)/.test(auth.text))throw Error('The existing AUTH_SECRET needs review; it was not replaced because that could break passwords.');
  }
- const dbBinding=own(settings,'DB'),fileBinding=own(settings,'FILES');
+ const dbBinding=own(settings,'DB'),fileBinding=own(settings,'FILES'),kvBinding=own(settings,'FILE_KV');
  if(dbBinding&&!databaseId.test(dbBinding.id||''))throw Error('The existing DB binding is invalid; it was preserved for review.');
  if(fileBinding?.jurisdiction&&fileBinding.jurisdiction!=='default')throw Error('The existing R2 jurisdiction needs an explicit configuration migration.');
- const bucketName=fileBinding?.bucket_name||TARGET.bucket;if(!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucketName))throw Error('The existing file bucket needs review.');
+ const bucketName=fileBinding?.bucket_name;if(fileBinding&&!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucketName||''))throw Error('The existing file bucket needs review.');
 
  // Read the resources before creating anything. Missing permissions fail early.
- const bucketReply=await client.request('GET',prefix+'/r2/buckets/'+bucketName,{optional:[404]});
- if(!bucketReply&&fileBinding)throw Error('The bound R2 bucket is missing. It was not silently replaced.');
- if(bucketReply?.result?.name!==undefined&&bucketReply.result.name!==bucketName)throw Error('Unexpected R2 bucket response.');
- if(bucketReply)await privateBucket(client,prefix,bucketName);
+ if(fileBinding){
+  const bucketReply=await client.request('GET',prefix+'/r2/buckets/'+bucketName,{optional:[404]});
+  if(!bucketReply)throw Error('The bound R2 bucket is missing. It was not silently replaced.');
+  if(bucketReply.result?.name!==undefined&&bucketReply.result.name!==bucketName)throw Error('Unexpected R2 bucket response.');
+  await privateBucket(client,prefix,bucketName);
+ }
  let database;
  if(dbBinding)database=(await client.request('GET',prefix+'/d1/database/'+dbBinding.id)).result;
  else{const candidates=(await list(client,prefix+'/d1/database?name='+TARGET.database)).filter(item=>item.name===TARGET.database);if(candidates.length>1)throw Error('Multiple matching databases require review.');database=candidates[0];}
- if(database){if(!databaseId.test(database.uuid||'')||dbBinding&&database.uuid!==dbBinding.id)throw Error('The existing database identity could not be verified.');await inspectDatabase(client,prefix,database.uuid);}
+ if(database){if(!databaseId.test(database.uuid||'')||dbBinding&&database.uuid!==dbBinding.id)throw Error('The existing database identity could not be verified.');const hasFiles=await inspectDatabase(client,prefix,database.uuid);if(hasFiles&&!fileBinding&&!kvBinding)throw Error('Existing file records have no storage binding. A data migration is required; files were preserved.');}
+
+ let namespaceId=kvBinding?.namespace_id;
+ if(!fileBinding){
+  const available=await list(client,prefix+'/storage/kv/namespaces');
+  if(namespaceId&&!available.some(item=>item.id===namespaceId))throw Error('The bound file namespace is missing or inaccessible. Existing files were preserved.');
+  if(!namespaceId){
+   const candidates=available.filter(item=>item.title===TARGET.namespace);
+   if(candidates.length>1)throw Error('Multiple file namespaces require review.');
+   namespaceId=candidates[0]?.id;
+   if(namespaceId&&!accountId.test(namespaceId))throw Error('The existing file namespace identifier is invalid.');
+  }
+ }
 
  let widget;const siteKey=publicKey(settings);
  if(siteKey){
@@ -136,7 +151,7 @@ export async function prepareAutomaticDeployment({token,base,fetchFn,mask=()=>{}
  }
 
  if(!database){database=(await client.request('POST',prefix+'/d1/database',{body:{name:TARGET.database}})).result;if(!databaseId.test(database?.uuid||''))throw Error('Cloudflare did not return a valid new database identifier.');log('Created the missing D1 database.');}
- if(!bucketReply){await client.request('POST',prefix+'/r2/buckets',{body:{name:bucketName,storage_class:'Standard'}});await privateBucket(client,prefix,bucketName);log('Created the missing private R2 bucket.');}
+ if(!fileBinding&&!namespaceId){const created=(await client.request('POST',prefix+'/storage/kv/namespaces',{body:{title:TARGET.namespace}})).result;namespaceId=created?.id;if(!accountId.test(namespaceId||''))throw Error('Cloudflare did not return a valid file namespace identifier.');log('Created the missing private KV file namespace.');}
  if(!widget){widget=(await client.request('POST',prefix+'/challenges/widgets',{body:{name:TARGET.widget,domains:[new URL(TARGET.origin).hostname],mode:'managed',clearance_level:'no_clearance'}})).result;if(!validWidget(widget))throw Error('Cloudflare did not return usable Turnstile production keys.');log('Created the missing production Turnstile widget.');}
  mask(widget.secret);
  const secrets=[{name:'TURNSTILE_SECRET_KEY',text:widget.secret}];
@@ -145,8 +160,11 @@ export async function prepareAutomaticDeployment({token,base,fetchFn,mask=()=>{}
  else log('Preserved the existing encrypted AUTH_SECRET; existing passwords remain verifiable.');
 
  const config=structuredClone(base);config.account_id=id;config.compatibility_date=settings.compatibility_date;config.compatibility_flags=flags;config.keep_vars=true;
- const namespaces=settings.bindings.filter(binding=>binding.type==='kv_namespace');if(namespaces.length)config.kv_namespaces=namespaces.map(binding=>({binding:binding.name,id:binding.namespace_id}));
- config.d1_databases=[{binding:'DB',database_name:database.name||TARGET.database,database_id:database.uuid,migrations_dir:'migrations'}];config.r2_buckets=[{binding:'FILES',bucket_name:bucketName}];
+ const namespaces=settings.bindings.filter(binding=>binding.type==='kv_namespace').map(binding=>({binding:binding.name,id:binding.namespace_id}));
+ if(!fileBinding&&!kvBinding)namespaces.push({binding:'FILE_KV',id:namespaceId});
+ if(namespaces.length)config.kv_namespaces=namespaces;else delete config.kv_namespaces;
+ config.d1_databases=[{binding:'DB',database_name:database.name||TARGET.database,database_id:database.uuid,migrations_dir:'migrations'}];
+ if(fileBinding)config.r2_buckets=[{binding:'FILES',bucket_name:bucketName}];else delete config.r2_buckets;
  config.vars={...base.vars,APP_ENV:'production',PUBLIC_ORIGIN:TARGET.origin,TURNSTILE_SITE_KEY:widget.sitekey};
  for(const name of ['AUTH_SECRET','TURNSTILE_SECRET_KEY','CLOUDFLARE_API_TOKEN'])delete config.vars[name];
  return {client,config,secrets,workerPath,originalFingerprint:fingerprint(settings)};

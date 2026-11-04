@@ -1,6 +1,6 @@
 export interface Limiter {limit(value:{key:string}):Promise<{success:boolean}>}
 export interface Env {
- DB:D1Database; FILES:R2Bucket; ASSETS:Fetcher;
+ DB:D1Database; FILES?:R2Bucket; FILE_KV?:KVNamespace; ASSETS:Fetcher;
  AUTH_LIMITER:Limiter; WRITE_LIMITER:Limiter; READ_LIMITER:Limiter;
  APP_ENV?:string; AUTH_SECRET?:string; PUBLIC_ORIGIN?:string;
  TURNSTILE_SITE_KEY?:string; TURNSTILE_SECRET_KEY?:string;

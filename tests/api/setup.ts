@@ -6,6 +6,7 @@ beforeEach(async()=>{
  await applyD1Migrations(env.DB,env.TEST_MIGRATIONS);
  for(const table of ['sessions','watchlist','files','posts','users'])await env.DB.prepare('DELETE FROM '+table).run();
  const objects=await env.FILES.list();if(objects.objects.length)await env.FILES.delete(objects.objects.map(o=>o.key));
+ const keys=await env.FILE_KV.list();await Promise.all(keys.keys.map(key=>env.FILE_KV.delete(key.name)));
  verificationReplies.length=0;
  quoteReplies.length=0;
  vi.spyOn(globalThis,'fetch').mockImplementation(async(input)=>{

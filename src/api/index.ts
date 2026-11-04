@@ -12,8 +12,9 @@ async function handle(request:Request,env:Env,ctx:ExecutionContext):Promise<Resp
  if((path.startsWith('/api/')||path.startsWith('/media/')||path==='/healthz')&&(method==='GET'||method==='HEAD'))await limited(env.READ_LIMITER,'ip:'+String(request.headers.get('CF-Connecting-IP')||'unknown'));
  if(path==='/healthz'){
   let db=false;try{const schema=await env.DB?.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name IN ('users','sessions','posts','posts_fts','files','watchlist')").first<{count:number}>();db=schema?.count===6;}catch{/* no credentials or internal SQL in the health response */}
-  const ready=db&&!!env.FILES&&authConfigured(env)&&!!env.AUTH_LIMITER&&!!env.WRITE_LIMITER&&!!env.READ_LIMITER;
-  return json({status:ready?'ok':'setup_required',version:VERSION,checks:{database:db,files:!!env.FILES,accounts:authConfigured(env)}},ready?200:503);
+  const files=!!(env.FILES||env.FILE_KV);
+  const ready=db&&files&&authConfigured(env)&&!!env.AUTH_LIMITER&&!!env.WRITE_LIMITER&&!!env.READ_LIMITER;
+  return json({status:ready?'ok':'setup_required',version:VERSION,checks:{database:db,files,accounts:authConfigured(env)}},ready?200:503);
  }
  if(path==='/api/config'&&method==='GET')return json({version:VERSION,accountsReady:authConfigured(env),turnstileSiteKey:env.TURNSTILE_SITE_KEY||'',maxFileBytes:2097152,marketPollSeconds:60,configuredInstruments:5000});
  if(!path.startsWith('/api/')&&!path.startsWith('/media/'))return env.ASSETS.fetch(request);

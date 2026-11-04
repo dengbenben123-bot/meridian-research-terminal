@@ -103,6 +103,21 @@ describe('object storage and bounded markets',()=>{
   expect((await call('/media/'+saved.id)).status).toBe(404);expect((await call('/media/'+saved.id,{cookie:bob.cookie})).status).toBe(404);
   const download=await call('/media/'+saved.id,{cookie:alice.cookie});expect(download.status).toBe(200);expect(download.headers.get('Cache-Control')).toContain('no-store');expect(new Uint8Array(await download.arrayBuffer())).toEqual(png);
  });
+ it('stores private files in KV and enforces ownership before reading them',async()=>{
+  const alice=await register(),bob=await register('bob@example.test');const kvEnv={FILES:undefined,FILE_KV:env.FILE_KV};
+  check('upload');const response=await call('/api/files',{method:'POST',cookie:alice.cookie,raw:png,headers:{'Content-Type':'image/png','X-Filename':'evidence.png','X-Turnstile-Token':'token'},env:kvEnv});
+  expect(response.status).toBe(201);const saved=await response.json<any>();const record=await env.DB.prepare('SELECT object_key FROM files WHERE id=?').bind(saved.id).first<any>();
+  expect(new Uint8Array((await env.FILE_KV.get(record.object_key,'arrayBuffer'))!)).toEqual(png);
+  expect((await call('/media/'+saved.id,{cookie:bob.cookie,env:kvEnv})).status).toBe(404);
+  const download=await call('/media/'+saved.id,{cookie:alice.cookie,env:kvEnv});expect(download.status).toBe(200);expect(download.headers.get('Cache-Control')).toContain('no-store');expect(new Uint8Array(await download.arrayBuffer())).toEqual(png);
+  expect((await call('/healthz',{env:kvEnv})).status).toBe(200);
+ });
+ it('treats a temporarily unavailable KV file as retryable',async()=>{
+  const account=await register();const kvEnv={FILES:undefined,FILE_KV:env.FILE_KV};check('upload');
+  const response=await call('/api/files',{method:'POST',cookie:account.cookie,raw:png,headers:{'Content-Type':'image/png','X-Filename':'evidence.png','X-Turnstile-Token':'token'},env:kvEnv});
+  const saved=await response.json<any>();const delayed={get:async()=>null} as unknown as KVNamespace;
+  const result=await call('/media/'+saved.id,{cookie:account.cookie,env:{FILES:undefined,FILE_KV:delayed}});expect(result.status).toBe(503);expect(await result.json()).toEqual({error:'File is still becoming available. Please retry shortly.'});
+ });
  it('validates file signatures and actual size before object storage writes',async()=>{
   const account=await register();expect((await file(account.cookie,new TextEncoder().encode('<script>bad</script>'))).status).toBe(415);
   expect((await file(account.cookie,png,'text/html')).status).toBe(415);expect((await file(account.cookie,new Uint8Array(2097153))).status).toBe(413);

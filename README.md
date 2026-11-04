@@ -1,6 +1,6 @@
 # Meridian Research Platform · v6
 
-Public research pages, accounts, private notes, supporting files, search and a focused market watchlist. Vue and the API live in this repository. Cloudflare Workers serves the app, D1 stores relational data, and R2 stores file bytes. There are no containers, long-running backend services or market-streaming processes.
+Public research pages, accounts, private notes, supporting files, search and a focused market watchlist. Vue and the API live in this repository. Cloudflare Workers serves the app, D1 stores relational data, and Workers KV stores file bytes for new installations. An existing R2 binding remains supported.
 
 **Production target:** https://meridian-research-terminal.cooked-jersey.workers.dev/
 
@@ -11,7 +11,7 @@ This is the intended deployment target, not evidence that this release has been 
 - Pre-renders the public home and product guide; loads published member research through the API.
 - Registers accounts and signs users in with opaque, server-side sessions. Supports logout, display-name changes and password changes.
 - Creates, edits, searches and deletes private notes; publishes selected notes explicitly. Version checks prevent one tab silently overwriting another.
-- Uploads private PNG, JPEG, WebP and PDF files to R2. Owners can publish a file, make it private again or delete it.
+- Uploads private PNG, JPEG, WebP and PDF files. Owners can publish a file, make it private again or delete it.
 - Searches public notes or the signed-in user's own notes with D1 FTS5.
 - Searches 5,000 configured securities, saves an account's watchlist and fetches bounded public quote snapshots. Optional 60-second polling runs only while the watchlist page is visible.
 
@@ -19,7 +19,7 @@ Every private read and write is checked on the server. The UI does not supply tr
 
 ## Publish from GitHub
 
-Save **one GitHub repository secret, `CLOUDFLARE_API_TOKEN`**, with the account permissions in **[DEPLOY.md](DEPLOY.md)**. Then run **Check and deploy Meridian** from the Actions tab. The workflow discovers the account, prepares D1/R2/Turnstile, generates a missing app secret and publishes to the existing Worker. R2 must already be enabled in the account. No other repository variables or keys are required.
+Save **one GitHub repository secret, `CLOUDFLARE_API_TOKEN`**, with the account permissions in **[DEPLOY.md](DEPLOY.md)**. Then run **Check and deploy Meridian** from the Actions tab. The workflow discovers the account, prepares D1/KV/Turnstile, generates a missing app secret and publishes to the existing Worker. Existing R2-backed installations keep R2 and their files.
 
 Future pushes to `main` deploy with the same authorization. The workflow installs locked dependencies, checks types, runs API and interface tests, builds public pages, preserves existing target/settings and app secrets, inspects existing data, applies migrations, deploys and verifies the live release. Pull requests run checks without deploying. Unsupported legacy schemas/bindings stop for a deliberate migration; no existing database is reset or replaced.
 
@@ -49,7 +49,7 @@ npm run build
 npm run build:worker
 ```
 
-The Worker dry run bundles code without publishing. API tests use an isolated Cloudflare runtime with local D1/R2 and mocked external quote/Turnstile replies; they do not create accounts in production or prove availability of an external provider.
+The Worker dry run bundles code without publishing. API tests use an isolated Cloudflare runtime with local D1, R2 and KV and mocked external quote/Turnstile replies; they do not create accounts in production or prove availability of an external provider.
 
 For optional local development:
 
@@ -66,7 +66,7 @@ Open `http://localhost:8787` when running that optional development command. Loc
 | Resource | Policy |
 | --- | --- |
 | Notes | Up to 100 per account; title 160 characters, body 10,000; private by default |
-| Files | 2 MiB per file, 20 MiB and 50 files per account; metadata in D1, bytes in R2 |
+| Files | 2 MiB per file, 20 MiB and 50 files per account; metadata in D1, bytes in KV or existing R2 |
 | Watchlist | Up to 50 saved symbols; at most 20 requested quotes at once |
 | Source | Tencent public web quotes, fetched only on request; no upstream service or latency guarantee |
 | Static pages | Served through Workers Static Assets; browsers revalidate HTML |
@@ -87,6 +87,6 @@ This replaces the previous server/container architecture in the source tree. Pre
 
 Keep the production `AUTH_SECRET` stable: it peppers password hashes. Changing it without a password migration makes existing passwords unverifiable. Keep all deployment credentials in GitHub Secrets and Cloudflare encrypted secrets, never in repository files.
 
-Cloudflare free allowances are finite. R2 requires an enabled subscription and can bill usage beyond included Standard storage/operation allowances; this architecture reduces work but does not guarantee zero cost at arbitrary traffic. See [Cloudflare R2 setup](https://developers.cloudflare.com/r2/get-started/) and [pricing](https://developers.cloudflare.com/r2/pricing/).
+Cloudflare free allowances are finite. Workers KV includes 1 GB of storage, 100,000 reads and 1,000 writes per day on the free plan. Quota exhaustion causes affected operations to fail until limits reset. KV propagation can take 60 seconds or longer, so a newly uploaded file may need a retry in another location. R2 remains supported for existing installations and has separate subscription and usage terms. See [KV pricing](https://developers.cloudflare.com/kv/platform/pricing/) and [consistency](https://developers.cloudflare.com/kv/concepts/how-kv-works/).
 
 MIT license; see [LICENSE](LICENSE).
