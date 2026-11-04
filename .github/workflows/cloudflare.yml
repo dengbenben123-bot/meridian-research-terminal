@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.cfut_3e8B3GUJM2HvPHz3LR5qhGGhuuZYE2jakGwYuCI593f5cb38 }}
     steps:
       - uses: actions/checkout@v6
         with:
