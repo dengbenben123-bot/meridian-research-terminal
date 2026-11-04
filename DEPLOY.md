@@ -49,7 +49,7 @@ Generated credentials stay in process memory until uploaded to Cloudflare. They 
 
 ## Verify
 
-In the `deploy` job, **Run npm run deploy** must have run successfully. A green workflow with that step marked **Skipped** means publishing did not happen.
+In the `deploy` job, **Run npm run deploy** must have run successfully. A missing token now fails the preflight step with a clear error. Older workflow runs may show green even though this deployment step was skipped.
 
 The final command checks the release at the existing URL. Open:
 
@@ -61,7 +61,7 @@ The response must include `"status":"ok"` and `"version":"6.0.0"`. The final log
 
 | Message | Action |
 | --- | --- |
-| Publishing was skipped | Add the single repository secret `CLOUDFLARE_API_TOKEN`, then run the workflow again. |
+| Token missing or empty | Add the repository secret `CLOUDFLARE_API_TOKEN`, then run the workflow again. |
 | 401 / 403 / cannot find the account | Check the token's expiry, account scope and the five permissions above. |
 | KV access failed | Check that the token has Workers KV Storage Edit permission and the account has available KV capacity. |
 | Existing R2 access failed | Check R2 Storage permissions and that the existing R2 subscription remains enabled. |
